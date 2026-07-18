@@ -64,6 +64,31 @@ export function potBedrag(matchen, pronos) {
   );
 }
 
+// Statistieken per speler over de afgeronde matchen (chronologisch
+// aangeleverd, oud → nieuw). Vorm = resultaat van de laatste vijf.
+export function maakStatistieken(deelnemerIds, matchenChronologisch, pronos) {
+  const volgorde = new Map(matchenChronologisch.map((m, i) => [m.id, i]));
+  return deelnemerIds.map((spelerId) => {
+    const eigen = pronos
+      .filter((p) => p.spelerId === spelerId && volgorde.has(p.matchId))
+      .sort((a, b) => volgorde.get(a.matchId) - volgorde.get(b.matchId));
+    const punten = eigen.reduce((som, p) => som + p.punten, 0);
+    const exact = eigen.filter((p) => p.exact).length;
+    const tendens = eigen.filter((p) => !p.exact && p.punten > 0).length;
+    return {
+      spelerId,
+      gespeeld: eigen.length,
+      punten,
+      exact,
+      tendens,
+      gemiddelde: eigen.length ? Math.round((punten / eigen.length) * 10) / 10 : 0,
+      vorm: eigen
+        .slice(-5)
+        .map((p) => (p.exact ? "exact" : p.punten > 0 ? "tendens" : "mis")),
+    };
+  });
+}
+
 export function deelStandTekst(seizoen, klassement, namenById, aantalMatchen, pot) {
   const rijen = klassement.map(
     (r) =>

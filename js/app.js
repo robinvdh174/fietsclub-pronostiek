@@ -6,6 +6,7 @@ import {
   maakKlassement,
   potBedrag,
   deelStandTekst,
+  maakStatistieken,
 } from "./logic.js";
 import { store } from "./store.js";
 
@@ -65,6 +66,7 @@ const routes = {
   "wijzig-match": renderWijzigMatch,
   matchen: renderMatchen,
   pot: renderPot,
+  statistieken: renderStatistieken,
   instellingen: renderInstellingen,
 };
 
@@ -78,6 +80,10 @@ async function navigeer() {
   } catch (fout) {
     scherm.innerHTML = `<p>Er ging iets mis: ${esc(fout.message)}</p>`;
   }
+  // zachte overgang tussen schermen
+  scherm.classList.remove("verschijn");
+  void scherm.offsetWidth;
+  scherm.classList.add("verschijn");
   document
     .querySelectorAll("nav a")
     .forEach((a) => a.classList.toggle("actief", a.hash === `#${route}`));
@@ -92,20 +98,81 @@ async function renderHome() {
     return;
   }
   const namen = await naamMap();
-  const { pronos, aantalMatchen } = await seizoenPronos(seizoen.id);
-  const pot = await seizoenPot(seizoen.id);
+  const [alleMatchen, allePronos] = await Promise.all([
+    store.alle("matchen"),
+    store.alle("pronos"),
+  ]);
+  const matchen = alleMatchen.filter((m) => m.seizoenId === seizoen.id);
+  const matchIds = new Set(matchen.map((m) => m.id));
+  const seizoensPronos = allePronos.filter((p) => matchIds.has(p.matchId));
+  const afgerond = matchen
+    .filter((m) => m.status === "afgerond")
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+  const afgerondIds = new Set(afgerond.map((m) => m.id));
+  const aantalMatchen = afgerond.length;
+  const pot = potBedrag(matchen, seizoensPronos);
   const klassement = maakKlassement(
     seizoen.deelnemers.map((d) => d.spelerId),
-    pronos
+    seizoensPronos.filter((p) => afgerondIds.has(p.matchId))
   );
+
+  // Laatste match: uitslag + wie er juist zat.
+  const laatste = afgerond.at(-1);
+  let laatsteKaart = "";
+  if (laatste) {
+    const lp = seizoensPronos.filter((p) => p.matchId === laatste.id);
+    const noem = (lijst) =>
+      lijst.map((p) => esc(namen[p.spelerId] ?? "?")).join(", ");
+    const exacte = lp.filter((p) => p.exact);
+    const winnaars = lp.filter((p) => !p.exact && p.punten > 0);
+    const wie =
+      exacte.length || winnaars.length
+        ? [
+            exacte.length ? `🎯 Exact: ${noem(exacte)}` : "",
+            winnaars.length ? `✔ Winnaar juist: ${noem(winnaars)}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : "Niemand zat juist.";
+    laatsteKaart = `<div class="kaart laatste-match">
+      <div class="label">Laatste match · ${laatste.datum.slice(8, 10)}/${laatste.datum.slice(5, 7)}</div>
+      <div class="match">${esc(laatste.thuisploeg)} – ${esc(laatste.uitploeg)}
+        <span class="score">${laatste.echteThuisScore}–${laatste.echteUitScore}</span></div>
+      <div class="wie">${wie}</div>
+    </div>`;
+  }
+
+  // Stijgers/dalers t.o.v. de stand vóór de laatste match.
+  let pijlen = {};
+  try {
+    const vorig = JSON.parse(localStorage.getItem("stand-vorig") || "null");
+    const plaatsen = Object.fromEntries(klassement.map((r) => [r.spelerId, r.plaats]));
+    if (vorig?.seizoenId === seizoen.id && aantalMatchen === vorig.aantalMatchen) {
+      pijlen = vorig.pijlen ?? {};
+    } else {
+      if (vorig?.seizoenId === seizoen.id && aantalMatchen > vorig.aantalMatchen) {
+        for (const r of klassement) {
+          const oud = vorig.plaatsen?.[r.spelerId];
+          if (oud && oud !== r.plaats) pijlen[r.spelerId] = oud > r.plaats ? "op" : "neer";
+        }
+      }
+      localStorage.setItem(
+        "stand-vorig",
+        JSON.stringify({ seizoenId: seizoen.id, aantalMatchen, plaatsen, pijlen })
+      );
+    }
+  } catch { /* geen localStorage — dan geen pijltjes */ }
+
   scherm.innerHTML = `
     <h2>${esc(seizoen.naam)} <span class="stil">· ${aantalMatchen} match${aantalMatchen === 1 ? "" : "en"}</span></h2>
+    ${laatsteKaart}
     <div class="klassement">
       ${klassement
         .map(
-          (r) => `<div class="rij ${r.plaats === 1 ? "een" : ""}">
+          (r, i) => `<div class="rij ${r.plaats === 1 ? "een" : ""}" style="animation-delay:${i * 45}ms">
                   <span class="rug">${r.plaats}</span>
                   <b>${esc(namen[r.spelerId] ?? "?")}</b>
+                  ${pijlen[r.spelerId] ? `<span class="pijl ${pijlen[r.spelerId]}">${pijlen[r.spelerId] === "op" ? "▲" : "▼"}</span>` : ""}
                   ${r.aantalExact > 0 ? `<span class="ex">${r.aantalExact}× exact</span>` : ""}
                   <span class="ptn">${r.punten}</span></div>`
         )
@@ -118,6 +185,50 @@ async function renderHome() {
     const tekst = deelStandTekst(seizoen, klassement, namen, aantalMatchen, pot);
     window.open(`https://wa.me/?text=${encodeURIComponent(tekst)}`, "_blank");
   };
+}
+
+async function renderStatistieken() {
+  const seizoen = await actiefSeizoen();
+  if (!seizoen) {
+    scherm.innerHTML = `<h2>Statistieken</h2>
+      <p class="stil">Er loopt geen seizoen.</p>`;
+    return;
+  }
+  const namen = await naamMap();
+  const [alleMatchen, allePronos] = await Promise.all([
+    store.alle("matchen"),
+    store.alle("pronos"),
+  ]);
+  const afgerond = alleMatchen
+    .filter((m) => m.seizoenId === seizoen.id && m.status === "afgerond")
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+  const ids = new Set(afgerond.map((m) => m.id));
+  const stats = maakStatistieken(
+    seizoen.deelnemers.map((d) => d.spelerId),
+    afgerond,
+    allePronos.filter((p) => ids.has(p.matchId))
+  ).sort((a, b) => b.punten - a.punten || b.exact - a.exact);
+  scherm.innerHTML = `
+    <h2>Statistieken <span class="stil">· ${esc(seizoen.naam)}</span></h2>
+    ${
+      afgerond.length === 0
+        ? `<p class="stil">Nog geen afgeronde matchen — na de eerste uitslag komt hier de vorm van elke speler.</p>`
+        : `<p class="stil vorm-legende"><i class="dot exact"></i> exact ·
+             <i class="dot tendens"></i> winnaar juist ·
+             <i class="dot mis"></i> mis &nbsp;(laatste 5, oud → nieuw)</p>
+           ${stats
+             .map(
+               (s) => `
+          <div class="stat-rij">
+            <div class="stat-kop"><b>${esc(namen[s.spelerId] ?? "?")}</b>
+              <span class="vorm">${s.vorm.map((v) => `<i class="dot ${v}"></i>`).join("")}</span></div>
+            <div class="stat-cijfers">${s.gespeeld} match${s.gespeeld === 1 ? "" : "en"} ·
+              ${s.exact}× exact · ${s.tendens}× winnaar juist ·
+              gem. ${String(s.gemiddelde).replace(".", ",")} ptn</div>
+          </div>`
+             )
+             .join("")}`
+    }`;
 }
 
 async function renderPot() {
@@ -300,15 +411,18 @@ async function renderSeizoenen() {
              <button>Start seizoen</button>
            </form>`
     }
-    <h3>Historie</h3>
-    <ul class="lijst">${
+    <h3>Erelijst</h3>
+    <ul class="lijst erelijst">${
       historie
         .map(
           (s) =>
-            `<li><span>${esc(s.naam)}</span>
-             <span>🏆 ${esc(namen[s.winnaarSpelerId] ?? "—")} · €${s.potUitbetaald}</span></li>`
+            `<li><span class="beker">🏆</span>
+             <span class="ere-info"><b>${esc(s.naam)}</b>
+               <span class="ere-winnaar">${esc(namen[s.winnaarSpelerId] ?? "—")}</span></span>
+             <span class="ere-pot">€${s.potUitbetaald}</span></li>`
         )
-        .join("") || "<li class='stil'>Nog geen afgesloten seizoenen.</li>"
+        .join("") ||
+      "<li class='stil'>Nog geen kampioenen — sluit een seizoen af en de eerste naam hangt hier voor eeuwig.</li>"
     }</ul>`;
 
   const form = scherm.querySelector("#nieuw-seizoen");
@@ -657,6 +771,7 @@ async function renderInstellingen() {
     <h2>Instellingen</h2>
     <a class="knop" href="#spelers">👥 Spelers beheren</a>
     <a class="knop" href="#seizoenen">📅 Seizoenen</a>
+    <a class="knop" href="#statistieken">📊 Statistieken</a>
     <h3>Puntentelling</h3>
     <form id="regels-form">
       <label>Exact juiste uitslag <input name="exact" type="number" min="0" value="${inst.exact}"></label>

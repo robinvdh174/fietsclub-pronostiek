@@ -214,6 +214,56 @@ label { display: flex; align-items: center; gap: .55rem; }
 .prono.dubbel { border-color: var(--rood); outline: 1px solid var(--rood); }
 .dubbel-melding { font: .72rem var(--sans); padding: .15rem .4rem; border-radius: 4px; font-style: normal; }
 .stil { color: var(--lichtbruin); font-size: .92rem; font-style: italic; }
+/* zachte schermovergang + klassement dat binnenrolt */
+main.verschijn { animation: scherm-in .22s ease-out; }
+@keyframes scherm-in { from { opacity: 0; translate: 0 8px; } }
+.klassement .rij { animation: rij-in .3s ease-out both; }
+@keyframes rij-in { from { opacity: 0; translate: -10px 0; } }
+.pijl { font-size: .7rem; }
+.pijl.op { color: #2e7d43; }
+.pijl.neer { color: var(--rood); }
+/* kaarten (o.a. laatste match) */
+.kaart {
+  background: var(--papier);
+  border: 1.5px solid var(--marine);
+  border-radius: 6px;
+  padding: .7rem .9rem;
+  margin-bottom: .9rem;
+  box-shadow: 3px 3px 0 var(--schaduw);
+}
+.kaart .label {
+  font: 700 .66rem var(--sans);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--rood);
+}
+.laatste-match .match { font-size: 1rem; font-weight: 700; margin: .2rem 0 .1rem; }
+.laatste-match .score { font: 800 1.05rem var(--cijfers); color: var(--rood); margin-left: .3rem; }
+.laatste-match .wie { font-size: .82rem; color: var(--bruin); }
+/* statistieken */
+.stat-rij { border-bottom: 1px dashed var(--lijn); padding: .55rem 0; }
+.stat-kop { display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; }
+.vorm { display: inline-flex; gap: .25rem; }
+.dot { width: .68rem; height: .68rem; border-radius: 50%; display: inline-block; background: var(--lijn); }
+.dot.exact { background: #2e7d43; }
+.dot.tendens { background: var(--goud); }
+.dot.mis { background: var(--rood); }
+.vorm-legende { margin-bottom: .4rem; }
+.vorm-legende .dot { width: .55rem; height: .55rem; }
+.stat-cijfers { font-size: .82rem; color: var(--lichtbruin); font-style: italic; }
+/* erelijst: het kampioenenbord */
+.erelijst li {
+  border-color: var(--goud);
+  background: linear-gradient(#fbf7ea, #f6eed6);
+  box-shadow: 3px 3px 0 #e3d5ae;
+}
+.erelijst .beker { font-size: 1.35rem; }
+.erelijst .ere-info { flex: 1; display: grid; }
+.erelijst .ere-winnaar { font-size: .85rem; color: var(--bruin); font-style: italic; }
+.erelijst .ere-pot { font: 800 1rem var(--cijfers); color: var(--goud); }
+@media (prefers-reduced-motion: reduce) {
+  main.verschijn, .klassement .rij { animation: none; }
+}
 /* Zwevende deelknop rechtsonder, net boven de navigatiebalk. */
 button.deel-knop {
   position: fixed;
