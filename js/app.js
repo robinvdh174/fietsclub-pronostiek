@@ -19,11 +19,7 @@ export function esc(tekst) {
 
 async function haalInstellingen() {
   return (
-    (await store.vind("instellingen", "app")) ?? {
-      id: "app",
-      ...STANDAARD_REGELS,
-      standaardInleg: 5,
-    }
+    (await store.vind("instellingen", "app")) ?? { id: "app", ...STANDAARD_REGELS }
   );
 }
 
@@ -103,11 +99,7 @@ async function renderHome() {
     pronos
   );
   scherm.innerHTML = `
-    <div class="kop-rij">
-      <h2>${esc(seizoen.naam)} <span class="stil">· ${aantalMatchen} match${aantalMatchen === 1 ? "" : "en"}</span></h2>
-      <button id="deel" class="deel-knop" title="Deel de stand via WhatsApp"
-        aria-label="Deel de stand via WhatsApp">${WHATSAPP_ICOON}</button>
-    </div>
+    <h2>${esc(seizoen.naam)} <span class="stil">· ${aantalMatchen} match${aantalMatchen === 1 ? "" : "en"}</span></h2>
     <div class="klassement">
       ${klassement
         .map(
@@ -119,7 +111,9 @@ async function renderHome() {
         )
         .join("")}
     </div>
-    <p class="pot">💰 In de pot: <strong>€${pot}</strong></p>`;
+    <p class="pot">💰 In de pot: <strong>€${pot}</strong></p>
+    <button id="deel" class="deel-knop" title="Deel de stand via WhatsApp"
+      aria-label="Deel de stand via WhatsApp">${WHATSAPP_ICOON}</button>`;
   scherm.querySelector("#deel").onclick = () => {
     const tekst = deelStandTekst(seizoen, klassement, namen, aantalMatchen, pot);
     window.open(`https://wa.me/?text=${encodeURIComponent(tekst)}`, "_blank");
@@ -231,10 +225,9 @@ async function renderSpelers() {
   );
 }
 async function renderSeizoenen() {
-  const [seizoenen, spelers, inst, namen] = await Promise.all([
+  const [seizoenen, spelers, namen] = await Promise.all([
     store.alle("seizoenen"),
     store.alle("spelers"),
-    haalInstellingen(),
     naamMap(),
   ]);
   const actief = seizoenen.find((s) => s.status === "actief");
@@ -372,8 +365,13 @@ async function renderNieuweMatch() {
       <a class="knop" href="#seizoenen">Start eerst een seizoen</a>`;
     return;
   }
-  const [namen, inst] = await Promise.all([naamMap(), haalInstellingen()]);
+  const [namen, alleMatchen] = await Promise.all([naamMap(), store.alle("matchen")]);
   const deelnemers = seizoen.deelnemers.filter((d) => namen[d.spelerId]);
+  // inleg vooraf invullen met die van de vorige match van dit seizoen
+  const vorigeInleg =
+    alleMatchen
+      .filter((m) => m.seizoenId === seizoen.id)
+      .sort((a, b) => b.datum.localeCompare(a.datum))[0]?.inleg ?? 0;
   scherm.innerHTML = `
     <h2>Nieuwe match</h2>
     <form id="match-form">
@@ -381,7 +379,7 @@ async function renderNieuweMatch() {
       <input name="thuis" placeholder="Thuisploeg" required>
       <input name="uit" placeholder="Uitploeg" required>
       <label class="inleg-regel">Inleg per speler (€)
-        <input name="inleg" type="number" min="0" step="0.5" value="${inst.standaardInleg}"></label>
+        <input name="inleg" type="number" min="0" step="0.5" value="${vorigeInleg}"></label>
       <h3>Pronostieken (niemand hetzelfde!)</h3>
       ${deelnemers
         .map(
@@ -624,8 +622,7 @@ async function renderInstellingen() {
     <h3>Puntentelling</h3>
     <form id="regels-form">
       <label>Exact juist <input name="exact" type="number" min="0" value="${inst.exact}"></label>
-      <label>Juiste winnaar/gelijk <input name="tendens" type="number" min="0" value="${inst.tendens}"></label>
-      <label>Standaard inleg per match (€) <input name="standaardInleg" type="number" min="0" step="0.5" value="${inst.standaardInleg}"></label>
+      <label>Winnaar juist gekozen <input name="tendens" type="number" min="0" value="${inst.tendens}"></label>
       <button>Bewaar</button>
     </form>`;
   scherm.querySelector("#regels-form").onsubmit = async (e) => {
@@ -634,7 +631,6 @@ async function renderInstellingen() {
       id: "app",
       exact: e.target.exact.valueAsNumber,
       tendens: e.target.tendens.valueAsNumber,
-      standaardInleg: e.target.standaardInleg.valueAsNumber,
     });
     alert("Bewaard. Geldt voor uitslagen die je vanaf nu invoert.");
   };

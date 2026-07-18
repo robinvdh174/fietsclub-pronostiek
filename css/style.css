@@ -49,14 +49,14 @@ h1 span { color: var(--rood); }
   font-size: 1.3rem;
   line-height: 1;
   transform: scaleX(-1); /* neus in de rijrichting */
-  animation: rijden 22s linear infinite;
+  animation: rijden 9s linear infinite;
   pointer-events: none;
   will-change: translate;
 }
+/* rechts eruit = meteen links weer erin */
 @keyframes rijden {
   0%   { translate: -2.5rem 0; }
-  38%  { translate: calc(100vw + 1.5rem) 0; }
-  100% { translate: calc(100vw + 1.5rem) 0; } /* even op adem komen */
+  100% { translate: calc(100vw + 1.5rem) 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .fietser { animation: none; visibility: hidden; }
@@ -103,10 +103,18 @@ input, button, .knop {
   min-width: 0;   /* iOS-Safari: anders duwt een datumveld zich buiten beeld */
   max-width: 100%;
 }
+/* iOS-Safari geeft datumvelden een eigen vaste breedte; dwing ze in het gareel. */
 input[type="date"] {
   -webkit-appearance: none;
   appearance: none;
-  min-height: 2.9rem; /* iOS geeft een "leeg" datumveld anders geen hoogte */
+  display: flex;
+  align-items: center;
+  min-height: 2.9rem;
+  box-sizing: border-box;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
 }
 input::placeholder { color: var(--lichtbruin); font-style: italic; }
 input[type="checkbox"] { width: 1.35rem; height: 1.35rem; accent-color: var(--rood); }
@@ -206,16 +214,24 @@ label { display: flex; align-items: center; gap: .55rem; }
 .prono.dubbel { border-color: var(--rood); outline: 1px solid var(--rood); }
 .dubbel-melding { font: .72rem var(--sans); padding: .15rem .4rem; border-radius: 4px; font-style: normal; }
 .stil { color: var(--lichtbruin); font-size: .92rem; font-style: italic; }
-.kop-rij { display: flex; align-items: flex-start; justify-content: space-between; gap: .6rem; }
+/* Zwevende deelknop rechtsonder, net boven de navigatiebalk. */
 button.deel-knop {
-  width: auto;
-  padding: .3rem;
+  position: fixed;
+  right: .9rem;
+  bottom: calc(4.9rem + env(safe-area-inset-bottom));
+  width: 52px;
+  height: 52px;
+  padding: 0;
   margin: 0;
-  background: none;
   border: 0;
-  box-shadow: none;
-  color: #1fa855;
-  line-height: 0;
+  border-radius: 50%;
+  background: #1fa855;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(34, 55, 90, .3);
+  z-index: 5;
 }
 .acties { display: flex; gap: .4rem; align-items: center; }
 a.knop.klein {
