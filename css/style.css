@@ -233,7 +233,10 @@ button.deel-knop {
   box-shadow: 0 4px 10px rgba(34, 55, 90, .3);
   z-index: 5;
 }
-.acties { display: flex; gap: .4rem; align-items: center; }
+.acties { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.ploegen-rij { display: flex; align-items: center; gap: .45rem; }
+.ploegen-rij input { flex: 1; min-width: 0; }
+.ploegen-rij .vs { color: var(--lichtbruin); }
 a.knop.klein {
   display: inline-block;
   width: auto;

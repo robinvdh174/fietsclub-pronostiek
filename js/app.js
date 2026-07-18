@@ -202,7 +202,11 @@ async function renderSpelers() {
         (s) => `
       <li class="${s.actief ? "" : "inactief"}">
         <span>${esc(s.naam)}</span>
-        <button class="klein" data-id="${s.id}">${s.actief ? "Zet inactief" : "Zet actief"}</button>
+        <span class="acties">
+          <button class="klein" data-actie="naam" data-id="${s.id}" title="Naam wijzigen">✏️</button>
+          <button class="klein" data-actie="weg" data-id="${s.id}" title="Verwijder speler">🗑️</button>
+          <button class="klein" data-actie="toggle" data-id="${s.id}">${s.actief ? "Zet inactief" : "Zet actief"}</button>
+        </span>
       </li>`
       )
       .join("") || "<li class='stil'>Nog geen spelers.</li>"}
@@ -218,8 +222,36 @@ async function renderSpelers() {
     (knop) =>
       (knop.onclick = async () => {
         const speler = await store.vind("spelers", knop.dataset.id);
-        speler.actief = !speler.actief;
-        await store.bewaar("spelers", speler);
+        if (knop.dataset.actie === "naam") {
+          // Namen staan alleen op de spelerskaart (rest verwijst via id),
+          // dus een nieuwe naam verschijnt overal vanzelf.
+          const nieuw = prompt(`Nieuwe naam voor ${speler.naam}:`, speler.naam);
+          if (!nieuw || !nieuw.trim() || nieuw.trim() === speler.naam) return;
+          speler.naam = nieuw.trim();
+          await store.bewaar("spelers", speler);
+        } else if (knop.dataset.actie === "weg") {
+          const [pronos, seizoenen] = await Promise.all([
+            store.alle("pronos"),
+            store.alle("seizoenen"),
+          ]);
+          const inGebruik =
+            pronos.some((p) => p.spelerId === speler.id) ||
+            seizoenen.some(
+              (z) =>
+                z.winnaarSpelerId === speler.id ||
+                z.deelnemers.some((d) => d.spelerId === speler.id)
+            );
+          if (inGebruik)
+            return alert(
+              `${speler.naam} zit in een seizoen of heeft pronostieken. ` +
+                `Zet hem inactief — dan doet hij niet meer mee maar blijft de historiek kloppen.`
+            );
+          if (!confirm(`${speler.naam} definitief verwijderen?`)) return;
+          await store.verwijder("spelers", speler.id);
+        } else {
+          speler.actief = !speler.actief;
+          await store.bewaar("spelers", speler);
+        }
         renderSpelers();
       })
   );
@@ -376,8 +408,11 @@ async function renderNieuweMatch() {
     <h2>Nieuwe match</h2>
     <form id="match-form">
       <input name="datum" type="date" value="${new Date().toISOString().slice(0, 10)}" required>
-      <input name="thuis" placeholder="Thuisploeg" required>
-      <input name="uit" placeholder="Uitploeg" required>
+      <div class="ploegen-rij">
+        <input name="thuis" placeholder="Thuisploeg" required>
+        <span class="vs">–</span>
+        <input name="uit" placeholder="Uitploeg" required>
+      </div>
       <label class="inleg-regel">Inleg per speler (€)
         <input name="inleg" type="number" min="0" step="0.5" value="${vorigeInleg}"></label>
       <h3>Pronostieken (niemand hetzelfde!)</h3>
@@ -465,8 +500,11 @@ async function renderWijzigMatch(matchId) {
     <h2>Wijzig match</h2>
     <form id="match-form">
       <input name="datum" type="date" value="${match.datum}" required>
-      <input name="thuis" placeholder="Thuisploeg" value="${esc(match.thuisploeg)}" required>
-      <input name="uit" placeholder="Uitploeg" value="${esc(match.uitploeg)}" required>
+      <div class="ploegen-rij">
+        <input name="thuis" placeholder="Thuisploeg" value="${esc(match.thuisploeg)}" required>
+        <span class="vs">–</span>
+        <input name="uit" placeholder="Uitploeg" value="${esc(match.uitploeg)}" required>
+      </div>
       <label class="inleg-regel">Inleg per speler (€)
         <input name="inleg" type="number" min="0" step="0.5" value="${match.inleg ?? 0}"></label>
       <h3>Pronostieken (niemand hetzelfde!)</h3>
@@ -621,7 +659,7 @@ async function renderInstellingen() {
     <a class="knop" href="#seizoenen">📅 Seizoenen</a>
     <h3>Puntentelling</h3>
     <form id="regels-form">
-      <label>Exact juist <input name="exact" type="number" min="0" value="${inst.exact}"></label>
+      <label>Exact juiste uitslag <input name="exact" type="number" min="0" value="${inst.exact}"></label>
       <label>Winnaar juist gekozen <input name="tendens" type="number" min="0" value="${inst.tendens}"></label>
       <button>Bewaar</button>
     </form>`;
