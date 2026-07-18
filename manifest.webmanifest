@@ -1,0 +1,13 @@
+{
+  "name": "Fits Club Neet Te Snel — Pronostiek",
+  "short_name": "Pronostiek",
+  "description": "Pronostiek- en klassementstool van Fits Club Neet Te Snel",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
