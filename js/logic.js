@@ -54,11 +54,17 @@ export function maakKlassement(deelnemerIds, pronos) {
   return rijen;
 }
 
-export function potBedrag(seizoen) {
-  return seizoen.inleg * seizoen.deelnemers.filter((d) => d.betaald).length;
+// De pot groeit per match: elke match heeft een inleg per speler, en per
+// speler wordt bijgehouden of die voor die match betaald heeft.
+export function potBedrag(matchen, pronos) {
+  const inlegPerMatch = new Map(matchen.map((m) => [m.id, m.inleg ?? 0]));
+  return pronos.reduce(
+    (som, p) => som + (p.inlegBetaald ? inlegPerMatch.get(p.matchId) ?? 0 : 0),
+    0
+  );
 }
 
-export function deelStandTekst(seizoen, klassement, namenById, aantalMatchen) {
+export function deelStandTekst(seizoen, klassement, namenById, aantalMatchen, pot) {
   const rijen = klassement.map(
     (r) =>
       `${r.plaats}. ${namenById[r.spelerId] ?? "?"} — ${r.punten} ptn` +
@@ -68,6 +74,6 @@ export function deelStandTekst(seizoen, klassement, namenById, aantalMatchen) {
     `🚴 Fits Club Neet Te Snel — ${seizoen.naam}`,
     `Klassement na ${aantalMatchen} match${aantalMatchen === 1 ? "" : "en"}:`,
     ...rijen,
-    `💰 In de pot: €${potBedrag(seizoen)}`,
+    `💰 In de pot: €${pot}`,
   ].join("\n");
 }

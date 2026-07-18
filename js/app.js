@@ -50,6 +50,17 @@ async function seizoenPronos(seizoenId) {
   return { pronos: pronos.filter((p) => ids.has(p.matchId)), aantalMatchen: ids.size };
 }
 
+// Pot van een seizoen: som over alle matchen (open én afgerond).
+async function seizoenPot(seizoenId) {
+  const [matchen, pronos] = await Promise.all([
+    store.alle("matchen"),
+    store.alle("pronos"),
+  ]);
+  const eigen = matchen.filter((m) => m.seizoenId === seizoenId);
+  const ids = new Set(eigen.map((m) => m.id));
+  return potBedrag(eigen, pronos.filter((p) => ids.has(p.matchId)));
+}
+
 const routes = {
   home: renderHome,
   spelers: renderSpelers,
@@ -86,6 +97,7 @@ async function renderHome() {
   }
   const namen = await naamMap();
   const { pronos, aantalMatchen } = await seizoenPronos(seizoen.id);
+  const pot = await seizoenPot(seizoen.id);
   const klassement = maakKlassement(
     seizoen.deelnemers.map((d) => d.spelerId),
     pronos
@@ -107,9 +119,9 @@ async function renderHome() {
         )
         .join("")}
     </div>
-    <p class="pot">💰 In de pot: <strong>€${potBedrag(seizoen)}</strong></p>`;
+    <p class="pot">💰 In de pot: <strong>€${pot}</strong></p>`;
   scherm.querySelector("#deel").onclick = () => {
-    const tekst = deelStandTekst(seizoen, klassement, namen, aantalMatchen);
+    const tekst = deelStandTekst(seizoen, klassement, namen, aantalMatchen, pot);
     window.open(`https://wa.me/?text=${encodeURIComponent(tekst)}`, "_blank");
   };
 }
@@ -122,24 +134,61 @@ async function renderPot() {
     return;
   }
   const namen = await naamMap();
+  const [alleMatchen, allePronos] = await Promise.all([
+    store.alle("matchen"),
+    store.alle("pronos"),
+  ]);
+  const matchen = alleMatchen
+    .filter((m) => m.seizoenId === seizoen.id)
+    .sort((a, b) => b.datum.localeCompare(a.datum));
+  const ids = new Set(matchen.map((m) => m.id));
+  const pronos = allePronos.filter((p) => ids.has(p.matchId));
   scherm.innerHTML = `
     <h2>Pot — ${esc(seizoen.naam)}</h2>
-    <p class="pot">💰 In de pot: <strong>€${potBedrag(seizoen)}</strong>
-      <span class="stil">(inleg €${seizoen.inleg} p.p.)</span></p>
-    <fieldset><legend>Inleg betaald?</legend>
-      ${seizoen.deelnemers
-        .map(
-          (d, i) =>
-            `<label><input type="checkbox" data-i="${i}" ${d.betaald ? "checked" : ""}>
-             ${esc(namen[d.spelerId] ?? "?")}</label>`
-        )
-        .join("")}
-    </fieldset>`;
-  scherm.querySelectorAll("fieldset input").forEach(
+    <p class="pot">💰 In de pot: <strong>€${potBedrag(matchen, pronos)}</strong></p>
+    ${
+      matchen.length === 0
+        ? `<p class="stil">Nog geen matchen — de pot groeit per match.</p>`
+        : matchen
+            .map((m) => {
+              const eigen = pronos
+                .filter((p) => p.matchId === m.id)
+                .sort((a, b) =>
+                  (namen[a.spelerId] ?? "").localeCompare(namen[b.spelerId] ?? "")
+                );
+              return `
+      <fieldset class="pot-match" data-match="${m.id}">
+        <legend>${esc(m.thuisploeg)} – ${esc(m.uitploeg)} · ${m.datum.slice(8, 10)}/${m.datum.slice(5, 7)}</legend>
+        <label class="inleg-regel">Inleg per speler (€)
+          <input type="number" min="0" step="0.5" class="match-inleg" value="${m.inleg ?? 0}">
+        </label>
+        ${eigen
+          .map(
+            (p) => `<label><input type="checkbox" data-prono="${p.id}"
+              ${p.inlegBetaald ? "checked" : ""}> ${esc(namen[p.spelerId] ?? "?")}</label>`
+          )
+          .join("")}
+      </fieldset>`;
+            })
+            .join("")
+    }`;
+  scherm.querySelectorAll(".match-inleg").forEach(
+    (veld) =>
+      (veld.onchange = async () => {
+        const match = matchen.find(
+          (m) => m.id === veld.closest(".pot-match").dataset.match
+        );
+        match.inleg = veld.valueAsNumber || 0;
+        await store.bewaar("matchen", match);
+        renderPot();
+      })
+  );
+  scherm.querySelectorAll("input[data-prono]").forEach(
     (vak) =>
       (vak.onchange = async () => {
-        seizoen.deelnemers[vak.dataset.i].betaald = vak.checked;
-        await store.bewaar("seizoenen", seizoen);
+        const prono = pronos.find((p) => p.id === vak.dataset.prono);
+        prono.inlegBetaald = vak.checked;
+        await store.bewaar("pronos", prono);
         renderPot();
       })
   );
@@ -197,7 +246,7 @@ async function renderSeizoenen() {
     ${
       actief
         ? `<p><strong>${esc(actief.naam)}</strong> loopt (gestart ${actief.startdatum},
-             ${actief.deelnemers.length} deelnemers, inleg €${actief.inleg} p.p.).</p>
+             ${actief.deelnemers.length} deelnemers).</p>
            <fieldset><legend>Deelnemers</legend>
              ${spelers
                .filter((s) => s.actief || actief.deelnemers.some((d) => d.spelerId === s.id))
@@ -213,7 +262,6 @@ async function renderSeizoenen() {
            <button id="sluit-af" class="gevaar">🏁 Seizoen afsluiten</button>`
         : `<form id="nieuw-seizoen">
              <input name="naam" placeholder="Naam (bv. Najaar 2026)" required>
-             <label>Inleg p.p. (€) <input name="inleg" type="number" min="0" step="0.5" value="${inst.standaardInleg}"></label>
              <fieldset><legend>Deelnemers</legend>
                ${spelers
                  .filter((s) => s.actief)
@@ -250,8 +298,7 @@ async function renderSeizoenen() {
         startdatum: new Date().toISOString().slice(0, 10),
         einddatum: null,
         status: "actief",
-        inleg: form.inleg.valueAsNumber || 0,
-        deelnemers: gekozen.map((c) => ({ spelerId: c.value, betaald: false })),
+        deelnemers: gekozen.map((c) => ({ spelerId: c.value })),
         winnaarSpelerId: null,
         potUitbetaald: null,
       });
@@ -283,7 +330,7 @@ async function renderSeizoenen() {
         ...actief.deelnemers.filter((d) => gekozen.has(d.spelerId)),
         ...[...gekozen]
           .filter((id) => !actief.deelnemers.some((d) => d.spelerId === id))
-          .map((id) => ({ spelerId: id, betaald: false })),
+          .map((id) => ({ spelerId: id })),
       ];
       await store.bewaar("seizoenen", actief);
       alert("Deelnemers bewaard. Bij een open match kun je hun pronostiek nog invullen via ✏️.");
@@ -299,7 +346,7 @@ async function renderSeizoenen() {
         pronos
       );
       const winnaar = klassement[0];
-      const pot = potBedrag(actief);
+      const pot = await seizoenPot(actief.id);
       if (
         !confirm(
           `Seizoen afsluiten? Winnaar: ${namen[winnaar?.spelerId] ?? "—"} ` +
@@ -325,7 +372,7 @@ async function renderNieuweMatch() {
       <a class="knop" href="#seizoenen">Start eerst een seizoen</a>`;
     return;
   }
-  const namen = await naamMap();
+  const [namen, inst] = await Promise.all([naamMap(), haalInstellingen()]);
   const deelnemers = seizoen.deelnemers.filter((d) => namen[d.spelerId]);
   scherm.innerHTML = `
     <h2>Nieuwe match</h2>
@@ -333,6 +380,8 @@ async function renderNieuweMatch() {
       <input name="datum" type="date" value="${new Date().toISOString().slice(0, 10)}" required>
       <input name="thuis" placeholder="Thuisploeg" required>
       <input name="uit" placeholder="Uitploeg" required>
+      <label class="inleg-regel">Inleg per speler (€)
+        <input name="inleg" type="number" min="0" step="0.5" value="${inst.standaardInleg}"></label>
       <h3>Pronostieken (niemand hetzelfde!)</h3>
       ${deelnemers
         .map(
@@ -381,6 +430,7 @@ async function renderNieuweMatch() {
       datum: form.datum.value,
       thuisploeg: form.thuis.value.trim(),
       uitploeg: form.uit.value.trim(),
+      inleg: form.inleg.valueAsNumber || 0,
       status: "open",
       echteThuisScore: null,
       echteUitScore: null,
@@ -393,6 +443,7 @@ async function renderNieuweMatch() {
         ...p,
         punten: 0,
         exact: false,
+        inlegBetaald: false,
       });
     }
     location.hash = "#matchen";
@@ -418,6 +469,8 @@ async function renderWijzigMatch(matchId) {
       <input name="datum" type="date" value="${match.datum}" required>
       <input name="thuis" placeholder="Thuisploeg" value="${esc(match.thuisploeg)}" required>
       <input name="uit" placeholder="Uitploeg" value="${esc(match.uitploeg)}" required>
+      <label class="inleg-regel">Inleg per speler (€)
+        <input name="inleg" type="number" min="0" step="0.5" value="${match.inleg ?? 0}"></label>
       <h3>Pronostieken (niemand hetzelfde!)</h3>
       <p class="stil">Laat leeg wie niet meedoet met deze match.</p>
       ${deelnemers
@@ -471,6 +524,7 @@ async function renderWijzigMatch(matchId) {
       datum: form.datum.value,
       thuisploeg: form.thuis.value.trim(),
       uitploeg: form.uit.value.trim(),
+      inleg: form.inleg.valueAsNumber || 0,
     });
     await store.bewaar("matchen", match);
     for (const p of leesPronos()) {
@@ -482,6 +536,7 @@ async function renderWijzigMatch(matchId) {
           ...p,
           punten: 0,
           exact: false,
+          inlegBetaald: oud?.inlegBetaald ?? false,
         });
       } else if (oud) {
         await store.verwijder("pronos", oud.id);
@@ -509,7 +564,7 @@ async function renderMatchen(matchId) {
         .map(
           (m) => `
       <li>
-        <span>${m.datum}<br><strong>${esc(m.thuisploeg)} – ${esc(m.uitploeg)}</strong>
+        <span>${m.datum.slice(8, 10)}/${m.datum.slice(5, 7)}<br><strong>${esc(m.thuisploeg)} – ${esc(m.uitploeg)}</strong>
         ${m.status === "afgerond" ? ` <span class="stil">(${m.echteThuisScore}–${m.echteUitScore})</span>` : ""}</span>
         ${m.status === "open"
           ? `<span class="acties"><a class="knop klein" href="#wijzig-match/${m.id}" title="Wijzig match">✏️</a>
@@ -570,7 +625,7 @@ async function renderInstellingen() {
     <form id="regels-form">
       <label>Exact juist <input name="exact" type="number" min="0" value="${inst.exact}"></label>
       <label>Juiste winnaar/gelijk <input name="tendens" type="number" min="0" value="${inst.tendens}"></label>
-      <label>Standaard inleg (€) <input name="standaardInleg" type="number" min="0" step="0.5" value="${inst.standaardInleg}"></label>
+      <label>Standaard inleg per match (€) <input name="standaardInleg" type="number" min="0" step="0.5" value="${inst.standaardInleg}"></label>
       <button>Bewaar</button>
     </form>`;
   scherm.querySelector("#regels-form").onsubmit = async (e) => {
