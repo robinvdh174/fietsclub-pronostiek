@@ -100,6 +100,13 @@ input, button, .knop {
   background: var(--papier);
   color: var(--marine);
   width: 100%;
+  min-width: 0;   /* iOS-Safari: anders duwt een datumveld zich buiten beeld */
+  max-width: 100%;
+}
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 2.9rem; /* iOS geeft een "leeg" datumveld anders geen hoogte */
 }
 input::placeholder { color: var(--lichtbruin); font-style: italic; }
 input[type="checkbox"] { width: 1.35rem; height: 1.35rem; accent-color: var(--rood); }
