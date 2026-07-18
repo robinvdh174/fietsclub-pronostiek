@@ -76,9 +76,8 @@ async function renderHome() {
   const seizoen = await actiefSeizoen();
   if (!seizoen) {
     scherm.innerHTML = `<h2>Welkom!</h2>
-      <p class="stil">Er loopt nog geen seizoen.</p>
-      <a class="knop" href="#spelers">1️⃣ Zet eerst de spelers erin</a>
-      <a class="knop" href="#seizoenen">2️⃣ Start dan een seizoen</a>`;
+      <p class="stil">Er loopt nog geen seizoen. Zodra er eentje gestart is,
+      zie je hier het klassement.</p>`;
     return;
   }
   const namen = await naamMap();
@@ -89,15 +88,17 @@ async function renderHome() {
   );
   scherm.innerHTML = `
     <h2>${esc(seizoen.naam)} <span class="stil">· ${aantalMatchen} match${aantalMatchen === 1 ? "" : "en"}</span></h2>
-    <table class="klassement">
-      <tr><th>#</th><th>Speler</th><th>Ptn</th><th>Exact</th></tr>
+    <div class="klassement">
       ${klassement
         .map(
-          (r) => `<tr><td>${r.plaats}</td><td>${esc(namen[r.spelerId] ?? "?")}</td>
-                  <td>${r.punten}</td><td>${r.aantalExact}</td></tr>`
+          (r) => `<div class="rij ${r.plaats === 1 ? "een" : ""}">
+                  <span class="rug">${r.plaats}</span>
+                  <b>${esc(namen[r.spelerId] ?? "?")}</b>
+                  ${r.aantalExact > 0 ? `<span class="ex">${r.aantalExact}× exact</span>` : ""}
+                  <span class="ptn">${r.punten}</span></div>`
         )
         .join("")}
-    </table>
+    </div>
     <p class="pot">💰 In de pot: <strong>€${potBedrag(seizoen)}</strong></p>
     <fieldset><legend>Inleg betaald?</legend>
       ${seizoen.deelnemers
@@ -109,7 +110,7 @@ async function renderHome() {
         .join("")}
     </fieldset>
     <a class="knop" href="#nieuwe-match">➕ Nieuwe match</a>
-    <button id="deel">📤 Deel de stand</button>`;
+    <button id="deel">📤 Deel met de groep</button>`;
   scherm.querySelectorAll("fieldset input").forEach(
     (vak) =>
       (vak.onchange = async () => {
@@ -117,14 +118,9 @@ async function renderHome() {
         await store.bewaar("seizoenen", seizoen);
       })
   );
-  scherm.querySelector("#deel").onclick = async () => {
+  scherm.querySelector("#deel").onclick = () => {
     const tekst = deelStandTekst(seizoen, klassement, namen, aantalMatchen);
-    if (navigator.share) {
-      await navigator.share({ text: tekst }).catch(() => {});
-    } else {
-      await navigator.clipboard.writeText(tekst);
-      alert("Stand gekopieerd — plak hem in WhatsApp.");
-    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(tekst)}`, "_blank");
   };
 }
 async function renderSpelers() {
@@ -416,11 +412,7 @@ async function renderInstellingen() {
       <label>Juiste winnaar/gelijk <input name="tendens" type="number" min="0" value="${inst.tendens}"></label>
       <label>Standaard inleg (€) <input name="standaardInleg" type="number" min="0" step="0.5" value="${inst.standaardInleg}"></label>
       <button>Bewaar</button>
-    </form>
-    <h3>Back-up</h3>
-    <button id="export">⬇️ Exporteer alles (JSON)</button>
-    <label class="knop">⬆️ Importeer back-up<input id="import" type="file" accept=".json,application/json" hidden></label>
-    <p class="stil">Exporteer af en toe en bewaar het bestand (bv. in WhatsApp naar jezelf) — dan ben je nooit iets kwijt.</p>`;
+    </form>`;
   scherm.querySelector("#regels-form").onsubmit = async (e) => {
     e.preventDefault();
     await store.bewaar("instellingen", {
@@ -430,27 +422,6 @@ async function renderInstellingen() {
       standaardInleg: e.target.standaardInleg.valueAsNumber,
     });
     alert("Bewaard. Geldt voor uitslagen die je vanaf nu invoert.");
-  };
-  scherm.querySelector("#export").onclick = async () => {
-    const dump = await store.exportAlles();
-    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `fietsclub-pronostiek-${dump.geexporteerd.slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-  scherm.querySelector("#import").onchange = async (e) => {
-    const bestand = e.target.files[0];
-    if (!bestand) return;
-    if (!confirm("Dit vervangt ALLE huidige gegevens door de back-up. Doorgaan?")) return;
-    try {
-      await store.importAlles(JSON.parse(await bestand.text()));
-      alert("Back-up teruggezet.");
-      location.hash = "#home";
-    } catch (fout) {
-      alert(`Import mislukt: ${fout.message}`);
-    }
   };
 }
 
