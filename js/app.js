@@ -55,9 +55,13 @@ const routes = {
   spelers: renderSpelers,
   seizoenen: renderSeizoenen,
   "nieuwe-match": renderNieuweMatch,
+  "wijzig-match": renderWijzigMatch,
   matchen: renderMatchen,
+  pot: renderPot,
   instellingen: renderInstellingen,
 };
+
+const WHATSAPP_ICOON = `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>`;
 
 async function navigeer() {
   const [route, arg] = location.hash.replace(/^#/, "").split("/");
@@ -87,7 +91,11 @@ async function renderHome() {
     pronos
   );
   scherm.innerHTML = `
-    <h2>${esc(seizoen.naam)} <span class="stil">· ${aantalMatchen} match${aantalMatchen === 1 ? "" : "en"}</span></h2>
+    <div class="kop-rij">
+      <h2>${esc(seizoen.naam)} <span class="stil">· ${aantalMatchen} match${aantalMatchen === 1 ? "" : "en"}</span></h2>
+      <button id="deel" class="deel-knop" title="Deel de stand via WhatsApp"
+        aria-label="Deel de stand via WhatsApp">${WHATSAPP_ICOON}</button>
+    </div>
     <div class="klassement">
       ${klassement
         .map(
@@ -99,7 +107,25 @@ async function renderHome() {
         )
         .join("")}
     </div>
-    <p class="pot">💰 In de pot: <strong>€${potBedrag(seizoen)}</strong></p>
+    <p class="pot">💰 In de pot: <strong>€${potBedrag(seizoen)}</strong></p>`;
+  scherm.querySelector("#deel").onclick = () => {
+    const tekst = deelStandTekst(seizoen, klassement, namen, aantalMatchen);
+    window.open(`https://wa.me/?text=${encodeURIComponent(tekst)}`, "_blank");
+  };
+}
+
+async function renderPot() {
+  const seizoen = await actiefSeizoen();
+  if (!seizoen) {
+    scherm.innerHTML = `<h2>Pot</h2>
+      <p class="stil">Er loopt geen seizoen, dus er is ook geen pot.</p>`;
+    return;
+  }
+  const namen = await naamMap();
+  scherm.innerHTML = `
+    <h2>Pot — ${esc(seizoen.naam)}</h2>
+    <p class="pot">💰 In de pot: <strong>€${potBedrag(seizoen)}</strong>
+      <span class="stil">(inleg €${seizoen.inleg} p.p.)</span></p>
     <fieldset><legend>Inleg betaald?</legend>
       ${seizoen.deelnemers
         .map(
@@ -108,20 +134,15 @@ async function renderHome() {
              ${esc(namen[d.spelerId] ?? "?")}</label>`
         )
         .join("")}
-    </fieldset>
-    <a class="knop" href="#nieuwe-match">➕ Nieuwe match</a>
-    <button id="deel">📤 Deel met de groep</button>`;
+    </fieldset>`;
   scherm.querySelectorAll("fieldset input").forEach(
     (vak) =>
       (vak.onchange = async () => {
         seizoen.deelnemers[vak.dataset.i].betaald = vak.checked;
         await store.bewaar("seizoenen", seizoen);
+        renderPot();
       })
   );
-  scherm.querySelector("#deel").onclick = () => {
-    const tekst = deelStandTekst(seizoen, klassement, namen, aantalMatchen);
-    window.open(`https://wa.me/?text=${encodeURIComponent(tekst)}`, "_blank");
-  };
 }
 async function renderSpelers() {
   const spelers = (await store.alle("spelers")).sort((a, b) =>
@@ -177,6 +198,18 @@ async function renderSeizoenen() {
       actief
         ? `<p><strong>${esc(actief.naam)}</strong> loopt (gestart ${actief.startdatum},
              ${actief.deelnemers.length} deelnemers, inleg €${actief.inleg} p.p.).</p>
+           <fieldset><legend>Deelnemers</legend>
+             ${spelers
+               .filter((s) => s.actief || actief.deelnemers.some((d) => d.spelerId === s.id))
+               .sort((a, b) => a.naam.localeCompare(b.naam))
+               .map(
+                 (s) =>
+                   `<label><input type="checkbox" name="lid" value="${s.id}"
+                    ${actief.deelnemers.some((d) => d.spelerId === s.id) ? "checked" : ""}> ${esc(s.naam)}</label>`
+               )
+               .join("")}
+             <button id="bewaar-deelnemers" class="klein">Bewaar deelnemers</button>
+           </fieldset>
            <button id="sluit-af" class="gevaar">🏁 Seizoen afsluiten</button>`
         : `<form id="nieuw-seizoen">
              <input name="naam" placeholder="Naam (bv. Najaar 2026)" required>
@@ -223,6 +256,38 @@ async function renderSeizoenen() {
         potUitbetaald: null,
       });
       location.hash = "#home";
+    };
+
+  const deelnemersKnop = scherm.querySelector("#bewaar-deelnemers");
+  if (deelnemersKnop)
+    deelnemersKnop.onclick = async (e) => {
+      e.preventDefault();
+      const gekozen = new Set(
+        [...scherm.querySelectorAll("input[name=lid]:checked")].map((c) => c.value)
+      );
+      if (gekozen.size < 2) return alert("Een seizoen heeft minstens twee deelnemers.");
+      const matchIds = new Set(
+        (await store.alle("matchen"))
+          .filter((m) => m.seizoenId === actief.id)
+          .map((m) => m.id)
+      );
+      const pronos = (await store.alle("pronos")).filter((p) => matchIds.has(p.matchId));
+      for (const d of actief.deelnemers) {
+        if (!gekozen.has(d.spelerId) && pronos.some((p) => p.spelerId === d.spelerId)) {
+          return alert(
+            `${namen[d.spelerId]} heeft al pronostieken in dit seizoen en kan er niet meer uit.`
+          );
+        }
+      }
+      actief.deelnemers = [
+        ...actief.deelnemers.filter((d) => gekozen.has(d.spelerId)),
+        ...[...gekozen]
+          .filter((id) => !actief.deelnemers.some((d) => d.spelerId === id))
+          .map((id) => ({ spelerId: id, betaald: false })),
+      ];
+      await store.bewaar("seizoenen", actief);
+      alert("Deelnemers bewaard. Bij een open match kun je hun pronostiek nog invullen via ✏️.");
+      renderSeizoenen();
     };
 
   const sluitKnop = scherm.querySelector("#sluit-af");
@@ -334,6 +399,98 @@ async function renderNieuweMatch() {
   };
 }
 
+// Open match aanpassen: datum, ploegen en pronostieken. Ook handig als
+// iemand alsnog wil meedoen: laat een prono leeg = doet niet mee.
+async function renderWijzigMatch(matchId) {
+  const match = await store.vind("matchen", matchId);
+  if (!match || match.status !== "open") { location.hash = "#matchen"; return; }
+  const [seizoen, namen, allePronos] = await Promise.all([
+    store.vind("seizoenen", match.seizoenId),
+    naamMap(),
+    store.alle("pronos"),
+  ]);
+  const pronos = allePronos.filter((p) => p.matchId === matchId);
+  const deelnemers = seizoen.deelnemers.filter((d) => namen[d.spelerId]);
+  const bestaande = (spelerId) => pronos.find((p) => p.spelerId === spelerId);
+  scherm.innerHTML = `
+    <h2>Wijzig match</h2>
+    <form id="match-form">
+      <input name="datum" type="date" value="${match.datum}" required>
+      <input name="thuis" placeholder="Thuisploeg" value="${esc(match.thuisploeg)}" required>
+      <input name="uit" placeholder="Uitploeg" value="${esc(match.uitploeg)}" required>
+      <h3>Pronostieken (niemand hetzelfde!)</h3>
+      <p class="stil">Laat leeg wie niet meedoet met deze match.</p>
+      ${deelnemers
+        .map((d) => {
+          const p = bestaande(d.spelerId);
+          return `
+        <div class="prono" data-speler="${d.spelerId}">
+          <span>${esc(namen[d.spelerId])}</span>
+          <input type="number" min="0" name="t-${d.spelerId}" value="${p ? p.voorspeldThuis : ""}"> –
+          <input type="number" min="0" name="u-${d.spelerId}" value="${p ? p.voorspeldUit : ""}">
+          <em class="dubbel-melding"></em>
+        </div>`;
+        })
+        .join("")}
+      <button>Bewaar wijzigingen</button>
+    </form>`;
+  const form = scherm.querySelector("#match-form");
+  const leesPronos = () =>
+    deelnemers.map((d) => ({
+      spelerId: d.spelerId,
+      voorspeldThuis: form[`t-${d.spelerId}`].valueAsNumber,
+      voorspeldUit: form[`u-${d.spelerId}`].valueAsNumber,
+    }));
+  const ingevuld = (p) =>
+    Number.isFinite(p.voorspeldThuis) && Number.isFinite(p.voorspeldUit);
+  const markeerDubbels = () => {
+    const lijst = leesPronos().filter(ingevuld);
+    let aantal = 0;
+    for (const div of form.querySelectorAll(".prono")) {
+      const eigen = lijst.find((p) => p.spelerId === div.dataset.speler);
+      const dubbel = eigen && vindDubbel(lijst, eigen);
+      div.classList.toggle("dubbel", Boolean(dubbel));
+      div.querySelector(".dubbel-melding").textContent = dubbel
+        ? `zelfde als ${namen[dubbel.spelerId]}!`
+        : "";
+      if (dubbel) aantal++;
+    }
+    return aantal;
+  };
+  form.oninput = markeerDubbels;
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    if (markeerDubbels() > 0)
+      return alert("Twee spelers hebben dezelfde uitslag — dat mag niet. Pas aan.");
+    const half = leesPronos().find(
+      (p) => !ingevuld(p) && (Number.isFinite(p.voorspeldThuis) || Number.isFinite(p.voorspeldUit))
+    );
+    if (half)
+      return alert(`De pronostiek van ${namen[half.spelerId]} is maar half ingevuld.`);
+    Object.assign(match, {
+      datum: form.datum.value,
+      thuisploeg: form.thuis.value.trim(),
+      uitploeg: form.uit.value.trim(),
+    });
+    await store.bewaar("matchen", match);
+    for (const p of leesPronos()) {
+      const oud = bestaande(p.spelerId);
+      if (ingevuld(p)) {
+        await store.bewaar("pronos", {
+          id: oud?.id ?? store.nieuwId(),
+          matchId: match.id,
+          ...p,
+          punten: 0,
+          exact: false,
+        });
+      } else if (oud) {
+        await store.verwijder("pronos", oud.id);
+      }
+    }
+    location.hash = "#matchen";
+  };
+}
+
 async function renderMatchen(matchId) {
   if (matchId) return renderUitslag(matchId);
   const seizoen = await actiefSeizoen();
@@ -354,7 +511,10 @@ async function renderMatchen(matchId) {
       <li>
         <span>${m.datum}<br><strong>${esc(m.thuisploeg)} – ${esc(m.uitploeg)}</strong>
         ${m.status === "afgerond" ? ` <span class="stil">(${m.echteThuisScore}–${m.echteUitScore})</span>` : ""}</span>
-        ${m.status === "open" ? `<a class="knop klein" style="width:auto" href="#matchen/${m.id}">Uitslag</a>` : "✅"}
+        ${m.status === "open"
+          ? `<span class="acties"><a class="knop klein" href="#wijzig-match/${m.id}" title="Wijzig match">✏️</a>
+             <a class="knop klein" href="#matchen/${m.id}">Uitslag</a></span>`
+          : "✅"}
       </li>`
         )
         .join("") || "<li class='stil'>Nog geen matchen.</li>"

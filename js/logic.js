@@ -55,7 +55,7 @@ export function maakKlassement(deelnemerIds, pronos) {
 }
 
 export function potBedrag(seizoen) {
-  return seizoen.inleg * seizoen.deelnemers.length;
+  return seizoen.inleg * seizoen.deelnemers.filter((d) => d.betaald).length;
 }
 
 export function deelStandTekst(seizoen, klassement, namenById, aantalMatchen) {

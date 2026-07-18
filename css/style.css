@@ -61,7 +61,7 @@ nav a {
   padding: .9rem 0 max(.9rem, env(safe-area-inset-bottom));
   color: #b8c2d4;
   text-decoration: none;
-  font: .82rem var(--sans);
+  font: .78rem var(--sans);
 }
 nav a.actief { color: var(--creme); font-weight: 700; }
 form { display: grid; gap: .7rem; margin-bottom: 1rem; }
@@ -172,3 +172,26 @@ label { display: flex; align-items: center; gap: .55rem; }
 .prono.dubbel { border-color: var(--rood); outline: 1px solid var(--rood); }
 .dubbel-melding { font: .72rem var(--sans); padding: .15rem .4rem; border-radius: 4px; font-style: normal; }
 .stil { color: var(--lichtbruin); font-size: .92rem; font-style: italic; }
+.kop-rij { display: flex; align-items: flex-start; justify-content: space-between; gap: .6rem; }
+button.deel-knop {
+  width: auto;
+  padding: .3rem;
+  margin: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  color: #1fa855;
+  line-height: 0;
+}
+.acties { display: flex; gap: .4rem; align-items: center; }
+a.knop.klein {
+  display: inline-block;
+  width: auto;
+  padding: .32rem .7rem;
+  font-size: .78rem;
+  margin: 0;
+  box-shadow: none;
+  background: var(--papier);
+  color: var(--marine);
+}
+fieldset button.klein { justify-self: start; }

@@ -1,4 +1,4 @@
-const CACHE = "fietsclub-pronostiek-v2";
+const CACHE = "fietsclub-pronostiek-v3";
 const ASSETS = [
   "./",
   "index.html",
