@@ -777,7 +777,15 @@ async function renderInstellingen() {
       <label>Exact juiste uitslag <input name="exact" type="number" min="0" value="${inst.exact}"></label>
       <label>Winnaar juist gekozen <input name="tendens" type="number" min="0" value="${inst.tendens}"></label>
       <button>Bewaar</button>
-    </form>`;
+    </form>
+    <h3>Back-up</h3>
+    <div class="backup-rij">
+      <button id="export" class="klein">⬇️ Bewaar back-up</button>
+      <label class="knop klein">⬆️ Zet terug<input id="import" type="file" accept=".json,application/json" hidden></label>
+    </div>
+    <p class="stil">Alles staat alleen op deze gsm. Bewaar af en toe een
+      back-upbestand (stuur het bv. naar jezelf in WhatsApp) — dan ben je
+      nooit iets kwijt als de gsm ooit wordt opgeschoond.</p>`;
   scherm.querySelector("#regels-form").onsubmit = async (e) => {
     e.preventDefault();
     await store.bewaar("instellingen", {
@@ -786,6 +794,27 @@ async function renderInstellingen() {
       tendens: e.target.tendens.valueAsNumber,
     });
     alert("Bewaard. Geldt voor uitslagen die je vanaf nu invoert.");
+  };
+  scherm.querySelector("#export").onclick = async () => {
+    const dump = await store.exportAlles();
+    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `fietsclub-pronostiek-${dump.geexporteerd.slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  scherm.querySelector("#import").onchange = async (e) => {
+    const bestand = e.target.files[0];
+    if (!bestand) return;
+    if (!confirm("Dit vervangt ALLE huidige gegevens door de back-up. Doorgaan?")) return;
+    try {
+      await store.importAlles(JSON.parse(await bestand.text()));
+      alert("Back-up teruggezet.");
+      location.hash = "#home";
+    } catch (fout) {
+      alert(`Terugzetten mislukt: ${fout.message}`);
+    }
   };
 }
 

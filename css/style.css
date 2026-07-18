@@ -287,7 +287,9 @@ button.deel-knop {
 .ploegen-rij { display: flex; align-items: center; gap: .45rem; }
 .ploegen-rij input { flex: 1; min-width: 0; }
 .ploegen-rij .vs { color: var(--lichtbruin); }
-a.knop.klein {
+.backup-rij { display: flex; gap: .5rem; }
+.backup-rij .klein, .backup-rij .knop.klein { flex: 1; text-align: center; padding: .5rem .7rem; }
+a.knop.klein, label.knop.klein {
   display: inline-block;
   width: auto;
   padding: .32rem .7rem;
