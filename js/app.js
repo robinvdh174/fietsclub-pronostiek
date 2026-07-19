@@ -5,10 +5,10 @@ import {
   vindDubbel,
   maakKlassement,
   potBedrag,
-  deelStandTekst,
   maakStatistieken,
 } from "./logic.js";
 import { store } from "./store.js";
+import { deelStand } from "./afbeelding.js";
 
 const scherm = document.getElementById("scherm");
 
@@ -182,8 +182,7 @@ async function renderHome() {
     <button id="deel" class="deel-knop" title="Deel de stand via WhatsApp"
       aria-label="Deel de stand via WhatsApp">${WHATSAPP_ICOON}</button>`;
   scherm.querySelector("#deel").onclick = () => {
-    const tekst = deelStandTekst(seizoen, klassement, namen, aantalMatchen, pot);
-    window.open(`https://wa.me/?text=${encodeURIComponent(tekst)}`, "_blank");
+    deelStand(seizoen, klassement, namen, aantalMatchen, pot);
   };
 }
 

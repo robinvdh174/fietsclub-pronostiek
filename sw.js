@@ -1,4 +1,4 @@
-const CACHE = "fietsclub-pronostiek-v9";
+const CACHE = "fietsclub-pronostiek-v10";
 const ASSETS = [
   "./",
   "index.html",
@@ -6,6 +6,7 @@ const ASSETS = [
   "js/app.js",
   "js/logic.js",
   "js/store.js",
+  "js/afbeelding.js",
   "manifest.webmanifest",
   "icons/icon-192.png",
   "icons/icon-512.png",
